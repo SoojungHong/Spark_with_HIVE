@@ -10,26 +10,38 @@ object SimpleApp {
 
     val isTest = true
     if(isTest != true) {
+      //---------------
+      // Spark Context
+      //---------------
       val conf = new SparkConf().setAppName("Simple Application")
       val sc = new SparkContext(conf)
       val sqlContext = new org.apache.spark.sql.hive.HiveContext(sc)
       import sqlContext.implicits._
 
+      //--------------------------------------
+      // Read raw peas in Hive table 'post39'
+      //--------------------------------------
       val readStart = System.nanoTime()
       // The results of SQL queries are themselves DataFrames and support all normal functions.
-      val sqlDF = sqlContext.sql("SELECT * FROM post39")
+      val rawPeasDF = sqlContext.sql("SELECT * FROM post39")
       val readEnd = System.nanoTime()
-      println("============= Elapsed Time : " + "Reading " + sqlDF.count() + " took " + (readEnd - readStart)/ 1000000000 + " in second")
-      sqlDF.show()
+      println("============= Elapsed Time : " + "Reading " + rawPeasDF.count() + " took " + (readEnd - readStart)/1000000000 + " in second")
+      rawPeasDF.show()
 
+      //--------------------------------------------------
+      // Apply Score function to column 'x1' in each pea
+      //--------------------------------------------------
       import org.apache.spark.sql.functions.udf
       val myScoreFunc = udf(scoreFunction _)
-      val cookedPeasDF = sqlDF.withColumn("y", myScoreFunc(sqlDF.col("x1")))
+      val cookedPeasDF = rawPeasDF.withColumn("y", myScoreFunc(rawPeasDF.col("x1")))
 
+      //-------------------------------------------------------------
+      // Write cooked peas using score function in Hive table 'peas'
+      //-------------------------------------------------------------
       val writeStart = System.nanoTime()
       cookedPeasDF.select(cookedPeasDF.col("x1"), cookedPeasDF.col("y")).write.mode("overwrite").saveAsTable("peas");
       val writeEnd = System.nanoTime() //============= Elapsed Time : Writing 20000000 took 13 in second
-      println("============= Elapsed Time : " + "Writing " + cookedPeasDF.count() + " took " + (writeEnd - writeStart)/ 1000000000 + " in second")
+      println("============= Elapsed Time : " + "Writing " + cookedPeasDF.count() + " took " + (writeEnd - writeStart)/1000000000 + " in second")
 
       val df = sqlContext.sql("SELECT * FROM peas")
       df.show()
@@ -68,15 +80,19 @@ object SimpleApp {
     val sc = new SparkContext(conf)
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
+
+    //create sample dataframe
     val df = Seq((12, 23), (888, 44), (2, 6), (19, 233), (98, 100)).toDF("x1", "x2")
     df.show()
 
+    //apply user defined function
     import org.apache.spark.sql.functions.udf
     val myFunc = udf(simpleFunc _)
 
     import org.apache.spark.sql.functions.udf
     val myScoreFunc = udf(scoreFunction _)
 
+    //add column y after apply function
     val newDF = df.withColumn("y", myScoreFunc(df.col("x1")))
     newDF.show()
   }
@@ -84,11 +100,6 @@ object SimpleApp {
   def simpleFunc(x:Int) : Double = {
     val y = x + 10
     return (y)
-  }
-
-  //ToDo
-  def createDataFrameFromCsv(): Unit ={
-
   }
 
 }

@@ -9,7 +9,7 @@ import scala.collection.mutable.ListBuffer
 object MakeRawPeas {
 
   def main(args:Array[String]): Unit = {
-    /*
+
     val outputFile = new BufferedWriter(new FileWriter("rawpeas.csv"))
     val csvWriter = new CSVWriter(outputFile)
     val csvHeader = Array("x1", "x2", "x3")
@@ -27,9 +27,9 @@ object MakeRawPeas {
 
     csvWriter.writeAll(listOfPeas.toList)
     outputFile.close()
-  */
+
     //creating peas with numerical values
-    createRawPeas()
+    //createRawPeas()
 
   }
 
