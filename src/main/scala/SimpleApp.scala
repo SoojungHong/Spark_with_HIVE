@@ -2,6 +2,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.functions._
+
 import scala.math._
 
 object SimpleApp {
@@ -73,6 +74,7 @@ object SimpleApp {
     return(y)
   }
 
+/*
   def createAndTestLocalDataFrame(): Unit = {
     System.setProperty("hadoop.home.dir", "c:\\winutil\\")
 
@@ -95,6 +97,41 @@ object SimpleApp {
     //add column y after apply function
     val newDF = df.withColumn("y", myScoreFunc(df.col("x1")))
     newDF.show()
+  }
+*/
+
+  def createAndTestLocalDataFrame(): Unit = {
+    System.setProperty("hadoop.home.dir", "c:\\winutil\\")
+
+    val conf = new SparkConf().setAppName("Local Application").setMaster("local")
+    val sc = new SparkContext(conf)
+    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+    import sqlContext.implicits._
+
+    //create sample dataframe
+    val myDF = Seq((12, 23, 34), (888, 44, 22), (2, 6, 33), (19, 233, 11), (98, 100, 3)).toDF("x1", "x2", "x3")
+    println("... original dataframe ")
+    myDF.show()
+
+    println()
+    println("... select two columns ")
+    val selectedDF = myDF.select(myDF.col("x1"), myDF.col("x2"))
+    selectedDF.show()
+
+    println()
+    println("... add new column with column")
+    selectedDF.withColumn("newCol", lit(null)).show()
+
+    //apply user defined function
+    import org.apache.spark.sql.functions.udf
+    val myFunc = udf(simpleFunc _)
+    val myScoreFunc = udf(scoreFunction _)
+
+    //add column y after apply function
+    val newDF = selectedDF.withColumn("x1 * x2", (selectedDF.col("x1") * selectedDF.col("x2")) ).select("x1 * x2")
+    newDF.show()
+
+    //selectedDF.select("x1 * x2")
   }
 
   def simpleFunc(x:Int) : Double = {
