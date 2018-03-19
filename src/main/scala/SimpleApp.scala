@@ -9,8 +9,38 @@ object SimpleApp {
 
   def main(args: Array[String]) {
 
-    val isTest = true
+    val isTest = false
     if(isTest != true) {
+      //---------------
+      // Spark Context
+      //---------------
+      val conf = new SparkConf().setAppName("Simple Application")
+      val sc = new SparkContext(conf)
+      val sqlContext = new org.apache.spark.sql.hive.HiveContext(sc)
+      import sqlContext.implicits._
+
+      //-------------------------------------------------
+      // Read raw peas in Hive table 'pea_account_raw'
+      //-------------------------------------------------
+      val peaAccountRawDF= sqlContext.sql("SELECT * FROM pea_account_raw")
+      println("=============================== DEBUG (SELECT * FROM pea_account_raw")
+      peaAccountRawDF.show()
+
+      val selectedCols = peaAccountRawDF.select(peaAccountRawDF.col("meta_past_id"), peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance") )
+      println("=============================== DEBUG select columns")
+      selectedCols.show()
+
+      val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", lit("100"))
+      println("=============================== DEBUG select columns in cooked_pea_account")
+      new_peaAccountRawDF.show()
+
+      // data.write.mode("append").insertInto("my_table")
+      new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created"), new_peaAccountRawDF.col("ts_received"), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour")).write.mode("append").insertInto("cooked_pea_account")
+
+      println("=============================== DEBUG select columns in cooked_pea_account")
+      val appendCookedPea = sqlContext.sql("SELECT * FROM cooked_pea_account")
+      appendCookedPea.show()
+      /*
       //---------------
       // Spark Context
       //---------------
@@ -46,10 +76,50 @@ object SimpleApp {
 
       val df = sqlContext.sql("SELECT * FROM peas")
       df.show()
+      */
 
     } else {
         createAndTestLocalDataFrame()
     }
+
+  }
+
+  def readTestHive(): Unit = {
+    //---------------
+    // Spark Context
+    //---------------
+    val conf = new SparkConf().setAppName("Simple Application")
+    val sc = new SparkContext(conf)
+    val sqlContext = new org.apache.spark.sql.hive.HiveContext(sc)
+    import sqlContext.implicits._
+
+    //--------------------------------------
+    // Read raw peas in Hive table 'post39'
+    //--------------------------------------
+    val readStart = System.nanoTime()
+    // The results of SQL queries are themselves DataFrames and support all normal functions.
+    val rawPeasDF = sqlContext.sql("SELECT * FROM post39")
+    val readEnd = System.nanoTime()
+    println("============= Elapsed Time : " + "Reading " + rawPeasDF.count() + " took " + (readEnd - readStart)/1000000000 + " in second")
+    rawPeasDF.show()
+
+    //--------------------------------------------------
+    // Apply Score function to column 'x1' in each pea
+    //--------------------------------------------------
+    import org.apache.spark.sql.functions.udf
+    val myScoreFunc = udf(scoreFunction _)
+    val cookedPeasDF = rawPeasDF.withColumn("y", myScoreFunc(rawPeasDF.col("x1")))
+
+    //-------------------------------------------------------------
+    // Write cooked peas using score function in Hive table 'peas'
+    //-------------------------------------------------------------
+    val writeStart = System.nanoTime()
+    cookedPeasDF.select(cookedPeasDF.col("x1"), cookedPeasDF.col("y")).write.mode("overwrite").saveAsTable("peas");
+    val writeEnd = System.nanoTime() //============= Elapsed Time : Writing 20000000 took 13 in second
+    println("============= Elapsed Time : " + "Writing " + cookedPeasDF.count() + " took " + (writeEnd - writeStart)/1000000000 + " in second")
+
+    val df = sqlContext.sql("SELECT * FROM peas")
+    df.show()
 
   }
 
@@ -128,8 +198,13 @@ object SimpleApp {
     val myScoreFunc = udf(scoreFunction _)
 
     //add column y after apply function
-    val newDF = selectedDF.withColumn("x1 * x2", (selectedDF.col("x1") * selectedDF.col("x2")) ).select("x1 * x2")
+    println("... update the 'newCol' with value of x1 * x2")
+    val newDF = selectedDF.withColumn("newCol", (selectedDF.col("x1") * selectedDF.col("x2"))) //this returns new DataFrame
     newDF.show()
+
+    println("... filter rows with x2 is bigger than 50")
+    val filteredDF = selectedDF.filter(selectedDF.col("x2") > 50)
+    filteredDF.show()
 
     //selectedDF.select("x1 * x2")
   }
