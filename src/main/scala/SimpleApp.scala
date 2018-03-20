@@ -1,9 +1,12 @@
+import java.math.BigInteger
+
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.apache.spark.sql.functions._
 
 import scala.math._
+import BigInt._
 
 object SimpleApp {
 
@@ -56,8 +59,9 @@ object SimpleApp {
 
   def calcScoreValue(peaAccountRawDF : DataFrame): DataFrame = {
     import org.apache.spark.sql.functions.udf
-    val stScoreFunc = udf(speedTestScoreFunction _)
-    val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", stScoreFunc(peaAccountRawDF.col("technical_value") * peaAccountRawDF.col("cust_relevance")))
+    val scoreFunc = udf(selectAndCalcScoreFunction _)
+    //val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", stScoreFunc(peaAccountRawDF.col("technical_value") * peaAccountRawDF.col("cust_relevance")))
+    val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", scoreFunc(peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance"), peaAccountRawDF.col("meta_past_id") ))
     val simplifiedCookedPeasDF = new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created"), new_peaAccountRawDF.col("ts_received"), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour"))
 
     simplifiedCookedPeasDF
@@ -102,7 +106,7 @@ object SimpleApp {
 
   }
 
-  def speedTestScoreFunction (x : Int) : Double = {
+  def speedTestScoreFunction (x : Double) : Double = {
     val zeroThresh = 80
     val slopePos = 0.1
     val slopeNeg = 0.6
@@ -121,6 +125,19 @@ object SimpleApp {
     }
 
     return(y)
+  }
+
+  def HFCScoreFunction (x : Double) : Double = {
+    val ret = 0.1
+    ret
+  }
+
+  def selectAndCalcScoreFunction(x1 : Double, x2 : Double, x3 : Int) = {
+    if(x3 == 2) { //if speedtest is 2
+      speedTestScoreFunction(x1 * x2)
+    } else if(x3 == 1) {
+      HFCScoreFunction(x1 * x2)
+    } //else call other function
   }
 
 /*
