@@ -48,10 +48,26 @@ object SimpleApp {
       val hiveDF = calcScoreValue(peaAccountRawDF)
       //could make partitions and save files in parquet
       //OK - BUT spark table not hive table//hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").saveAsTable("cooked_pea_account") //OK
-      hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
+      //hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
 
       //write as csv
       //hiveDF.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
+      hiveDF.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save("/user/hive/warehouse/cooked_pea_account_test/mytest.csv") //OK
+
+      /*
+      sqlContext.read.format("com.databricks.spark.csv")
+        //.option("header", "true")
+        .option("delimiter", ",")
+          .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv")
+        .insertInto("cooked_pea_account")
+      */
+
+      sqlContext.read.format("com.databricks.spark.csv")
+        .option("header", "true")
+        .option("delimiter", ",")
+        .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv").write.partitionBy("date", "hour").insertInto("cooked_pea_account")
+
+
 
       println("....... [DEBUG] SELECT * FROM cooked_pea_account")
       val appendCookedPea = sqlContext.sql("SELECT * FROM cooked_pea_account")
