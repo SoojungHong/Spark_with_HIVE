@@ -4,8 +4,8 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.apache.spark.sql.functions._
-
 import com.databricks.spark.csv._
+import org.apache.spark.sql.types.DataType
 
 import scala.math._
 
@@ -23,7 +23,7 @@ object SimpleApp {
       val sqlContext = new org.apache.spark.sql.hive.HiveContext(sc)
       sqlContext.setConf("hive.exec.dynamic.partition", "true")
       sqlContext.setConf("hive.exec.dynamic.partition.mode", "nonstrict")
-      sqlContext.setConf("hive.exec.max.dynamic.partitions.pernode", "1000")
+      sqlContext.setConf("hive.exec.max.dynamic.partitions", "2048")
       sqlContext.setConf("hive.enforce.bucketing", "true")
       sqlContext.setConf("hive.exec.compress.output", "true")
       sqlContext.setConf("spark.sql.hive.convertMetastoreParquet", "false")
@@ -46,28 +46,29 @@ object SimpleApp {
 
       //val hiveDF = new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created"), new_peaAccountRawDF.col("ts_received"), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour"))
       val hiveDF = calcScoreValue(peaAccountRawDF)
+
+      //ToDo : Add meta_past_halflife column
+      val df = hiveDF.withColumn("meta_past_halflife", lit(5))
+      //writeToHiveTable(df)
+      //writeToHiveTableInCsv(df)
+      //writeToHiveTableParquet
+      //writeToNewHiveTable(df)
+      //writeFewColumns(df)
+      //saveAsTableToHiveTable(df) //parquet is not readable from Hive table
+      saveAsTableToHiveTableFormatOrc(df) //orc code works
+      //? - date type to cast(date)?
+
+
       //could make partitions and save files in parquet
       //OK - BUT spark table not hive table//hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").saveAsTable("cooked_pea_account") //OK
       //hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
 
-      //write as csv
-      //hiveDF.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
-      hiveDF.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save("/user/hive/warehouse/cooked_pea_account_test/mytest.csv") //OK
+      //write dataframe into Hive Table
+      // X//hiveDF.write.partitionBy("date", "hour").insertInto("cooked_pea_account") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
+      //import org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions //Hive 2.1.1 - https://hive.apache.org/javadocs/r2.1.1/api/overview-summary.html
 
-      /*
-      sqlContext.read.format("com.databricks.spark.csv")
-        //.option("header", "true")
-        .option("delimiter", ",")
-          .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv")
-        .insertInto("cooked_pea_account")
-      */
-
-      sqlContext.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("delimiter", ",")
-        .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv").write.partitionBy("date", "hour").insertInto("cooked_pea_account")
-
-
+      //hiveDF.write.mode(SaveMode.Overwrite).partitionBy("date", "hour").insertInto("cooked_pea_account") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
+      //hiveDF.write.mode("overwrite").partitionBy("date", "hour").json("/user/hive/warehouse/cooked_pea_account_test/mytest.json")
 
       println("....... [DEBUG] SELECT * FROM cooked_pea_account")
       val appendCookedPea = sqlContext.sql("SELECT * FROM cooked_pea_account")
@@ -79,11 +80,82 @@ object SimpleApp {
 
   }
 
+  def writeFewColumns(df: DataFrame) : Unit = {
+    df.select(df.col("party_id"), df.col("date"), df.col("hour")).write.mode("overwrite").saveAsTable("cooked_pea_account")
+    // cookedPeasDF.select(cookedPeasDF.col("x1"), cookedPeasDF.col("y")).write.mode("overwrite").saveAsTable("peas");
+  }
+
+  def writeToNewHiveTable(df: DataFrame): Unit = { //error : non existing table does not work - table should be there
+    df.write.mode(SaveMode.Overwrite).insertInto("cooked_pea_account_test")
+    println("................DEBUG WriteToHiveTable")
+    df.show()
+  }
+
+  def writeToHiveTable(df: DataFrame): Unit = { //does not write, no error
+    df.write.mode(SaveMode.Overwrite).insertInto("cooked_pea_account")
+    println("................DEBUG WriteToHiveTable")
+    df.show()
+  }
+
+
+  def saveAsTableToHiveTable(df: DataFrame): Unit = { //does not write, no error
+    df.write.mode(SaveMode.Overwrite).saveAsTable("cooked_pea_account")
+    println("................DEBUG WriteToHiveTable")
+    df.show()
+  }
+
+
+  def saveAsTableToHiveTableFormatOrc(df: DataFrame): Unit = { //does not write, no error
+    df.write.mode(SaveMode.Overwrite).format("orc").saveAsTable("cooked_pea_account")
+    println("................DEBUG WriteToHiveTable")
+    df.show()
+  }
+
+  def writeToHiveTableInCsv(df: DataFrame): Unit = { //x
+    df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").insertInto("cooked_pea_account")
+    println("................DEBUG WriteToHiveTableInCsv")
+    df.show()
+  }
+
+  def writeToHiveTableParquet(df: DataFrame): Unit = { //x
+  //comment : this doesn't show as select * from table since 'FAILED: UnsupportedOperationException Parquet does not support date. See HIVE-6384'
+    df.write.mode("overwrite").saveAsTable("cooked_pea_account");
+    df.show()
+  }
+
+  def readCsvWriteToHiveTest(hiveDF : DataFrame, sqlContext: SQLContext) : Unit = {
+    //write as csv
+    //hiveDF.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
+    hiveDF.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save("/user/hive/warehouse/cooked_pea_account_test/mytest.csv") //OK
+
+    /*
+    sqlContext.read.format("com.databricks.spark.csv")
+      //.option("header", "true")
+      .option("delimiter", ",")
+        .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv")
+      .insertInto("cooked_pea_account")
+    */
+
+    sqlContext.read.format("com.databricks.spark.csv")
+      .option("header", "true")
+      .option("delimiter", ",")
+      .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv").write.partitionBy("date", "hour").insertInto("cooked_pea_account")
+  }
+
   def calcScoreValue(peaAccountRawDF : DataFrame): DataFrame = {
     import org.apache.spark.sql.functions.udf
     val scoreFunc = udf(selectAndCalcScoreFunction _)
     val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", scoreFunc(peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance"), peaAccountRawDF.col("meta_past_id")))
     val simplifiedCookedPeasDF = new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created"), new_peaAccountRawDF.col("ts_received"), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour"))
+
+    simplifiedCookedPeasDF
+  }
+
+  def calcScoreValueAndCast(peaAccountRawDF : DataFrame): DataFrame = {
+    import org.apache.spark.sql.functions.udf
+    val scoreFunc = udf(selectAndCalcScoreFunction _)
+    val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", scoreFunc(peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance"), peaAccountRawDF.col("meta_past_id")))
+    val simplifiedCookedPeasDF = new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created").cast(DataType.toString), new_peaAccountRawDF.col("ts_received").cast(DataType.toString), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour"))
 
     simplifiedCookedPeasDF
   }
