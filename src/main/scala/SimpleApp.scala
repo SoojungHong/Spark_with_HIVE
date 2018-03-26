@@ -36,11 +36,21 @@ object SimpleApp {
       //---------------
       val hiveTableNameToRead = "pea_account_raw"
       val hiveTableNameToWrite = "cooked_pea_account"
+
+      /*
       val paramDate = sc.getConf.get("date")
       val paramHour = sc.getConf.get("hour")
       val paramEnvironment = sc.getConf.get("env")
       val paramPeaType = sc.getConf.get("peaType")
       println("............. [DEBUG] params : date = " + paramDate + " ,hour = " + paramHour, " ,env = " + paramEnvironment + " ,peaType = " + paramPeaType)
+      */
+
+      val paramDate = args.apply(0) //sc.getConf.get("date")
+      val paramHour = args.apply(1) //sc.getConf.get("hour")
+      val paramEnvironment = args.apply(2)//sc.getConf.get("env")
+      val paramPeaType = args.apply(3) //sc.getConf.get("peaType")
+      println("............. [DEBUG] params : date = " + paramDate + " ,hour = " + paramHour, " ,env = " + paramEnvironment + " ,peaType = " + paramPeaType)
+
 
       //------------------------------------------------
       // Read raw peas in Hive table 'pea_account_raw'
