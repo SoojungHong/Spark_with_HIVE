@@ -224,18 +224,30 @@ object SimpleApp {
 
     val outputfile = outPutPath
     var outputFileName = outputfile + "/temp_" + paramDate+"-"+paramHour+".csv"
-    var mergedFileName = outputfile + "/merged_" + paramDate+"-"+paramHour+".csv"
+    var mergedFileName = outputfile + "/" + paramDate+"-"+paramHour+".csv"
     var mergeFindGlob  = outputFileName
 
     hiveDF.coalesce(1)
       .write.format("com.databricks.spark.csv")
-      .option("header", "true")
+      //.option("header", "true")
       .save(outputFileName)
 
     merge(mergeFindGlob, mergedFileName )
     hiveDF.unpersist()
 
     //ToDo : Load into inpath the csv file to table
+    //FAILED: ParseException line 1:142 Failed to recognize predicate 'date'. Failed rule: 'identifier' in load statement
+    //sqlContext.sql("load data inpath '/user/hive/warehouse/cooked_pea_account/date=2018-01-01/hour=03/2018-01-01-03.csv' into table cooked_pea_account partition (date='2018-01-01', hour=03)")
+
+    //FAILED: SemanticException [Error 10062]: Need to specify partition columns because the destination table is partitioned
+    //sqlContext.sql("load data inpath '/user/hive/warehouse/cooked_pea_account/date=2018-01-01/hour=03/2018-01-01-03.csv' into table cooked_pea_account")
+
+    //sqlContext.sql("load data inpath '"+ mergedFileName + "' into table cooked_pea_account partition (date='2018-01-01', hour='03')")
+
+    //`date`='2018-01-01',`hour`=03
+    //ToDo : replace with param 
+    sqlContext.sql("load data inpath '/user/hive/warehouse/cooked_pea_account/date=2018-01-01/hour=03/2018-01-01-03.csv' into table cooked_pea_account1 partition (`date`='2018-01-01',`hour`=03)")
+
   }
 
   import org.apache.hadoop.conf.Configuration
