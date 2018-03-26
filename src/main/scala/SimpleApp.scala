@@ -5,6 +5,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.apache.spark.sql.functions._
 import com.databricks.spark.csv._
+import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types.DataType
 
 import scala.math._
@@ -13,8 +14,8 @@ object SimpleApp {
 
   def main(args: Array[String]) {
 
-    val isTest = false
-    if(isTest != true) {
+    val isTestLocal = false
+    if(isTestLocal != true) {
       //---------------
       // Spark Context
       //---------------
@@ -23,45 +24,55 @@ object SimpleApp {
       val sqlContext = new org.apache.spark.sql.hive.HiveContext(sc)
       sqlContext.setConf("hive.exec.dynamic.partition", "true")
       sqlContext.setConf("hive.exec.dynamic.partition.mode", "nonstrict")
-      sqlContext.setConf("hive.exec.max.dynamic.partitions", "2048")
-      sqlContext.setConf("hive.enforce.bucketing", "true")
-      sqlContext.setConf("hive.exec.compress.output", "true")
-      sqlContext.setConf("spark.sql.hive.convertMetastoreParquet", "false")
+      //sqlContext.setConf("hive.exec.max.dynamic.partitions", "2048")
+      //sqlContext.setConf("hive.enforce.bucketing", "true")
+      //sqlContext.setConf("hive.exec.compress.output", "true")
+      //sqlContext.setConf("spark.sql.hive.convertMetastoreParquet", "false")
 
       import sqlContext.implicits._
 
-      //-------------------------------------------------
+      //---------------
+      // Parameters
+      //---------------
+      val hiveTableNameToRead = "pea_account_raw"
+      val hiveTableNameToWrite = "cooked_pea_account"
+      val paramDate = sc.getConf.get("date")
+      val paramHour = sc.getConf.get("hour")
+      val paramEnvironment = sc.getConf.get("env")
+      val paramPeaType = sc.getConf.get("peaType")
+      println("............. [DEBUG] params : date = " + paramDate + " ,hour = " + paramHour, " ,env = " + paramEnvironment + " ,peaType = " + paramPeaType)
+
+      //------------------------------------------------
       // Read raw peas in Hive table 'pea_account_raw'
-      //-------------------------------------------------
-      val peaAccountRawDF= sqlContext.sql("SELECT * FROM pea_account_raw")
-      println("....... [DEBUG] (SELECT * FROM pea_account_raw")
+      //------------------------------------------------
+      //val peaAccountRawDF= sqlContext.sql("SELECT * FROM dev_core.pea_account_raw WHERE date='2018-01-01'") //ToDo : Parameterize
+      val peaAccountRawDF= sqlContext.sql("SELECT * FROM " + hiveTableNameToRead);
+      println("....... [DEBUG] (SELECT * FROM "+ hiveTableNameToRead); //dev_core.pea_account_raw")
       peaAccountRawDF.show()
 
       val selectedCols = peaAccountRawDF.select(peaAccountRawDF.col("meta_past_id"), peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance") )
       println(".......[DEBUG] select columns")
       selectedCols.show()
 
-      //following could not parsed & insert statement for HIVE is too slow
-      //sqlContext.sql("insert into cooked_pea_account1 partition (date='2018-01-01',hour=02) values (228918879,92017266,3445801,13671760,'481C4CC6B7A','CUSTOMER','2018-01-01 00:57:25','2018-03-15 13:33:06',2,100.0,112354305)")
-
-      //val hiveDF = new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created"), new_peaAccountRawDF.col("ts_received"), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour"))
+      //-------------------------------------------------
+      // Calculate scores using dedicated score function
+      //-------------------------------------------------
       val hiveDF = calcScoreValue(peaAccountRawDF)
+      val df = hiveDF.withColumn("meta_past_halflife", lit(5)) //add meta_past_halflife column //ToDo: this value should be in the order
 
-      //ToDo : Add meta_past_halflife column
-      val df = hiveDF.withColumn("meta_past_halflife", lit(5))
       //writeToHiveTable(df)
       //writeToHiveTableInCsv(df)
       //writeToHiveTableParquet
       //writeToNewHiveTable(df)
       //writeFewColumns(df)
       //saveAsTableToHiveTable(df) //parquet is not readable from Hive table
-      saveAsTableToHiveTableFormatOrc(df) //orc code works
-      //? - date type to cast(date)?
+      saveAsTableToHiveTableFormatOrcWithoutPartition(df, hiveTableNameToWrite) //orc code works, select * works, database structure changed  - best
+      //saveAsTableToHiveTableFormatOrcWithPartition(df, hiveTableNameToWrite) //folder is created but select * from don't work
 
-
-      //could make partitions and save files in parquet
-      //OK - BUT spark table not hive table//hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").saveAsTable("cooked_pea_account") //OK
-      //hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
+      //saveAsTableToHiveTableFormatCsv(df)
+      //saveAsTableToHiveTableFormatCsvWithPartition(df, hiveTableNameToWrite) //partition not working
+      //insertIntoTableFormatOrcWithPartition(df, hiveTableNameToWrite) //error - partition error
+      //insertIntoTableFormatOrcWithoutPartition(df, hiveTableNameToWrite) //orc code works, select * not working
 
       //write dataframe into Hive Table
       // X//hiveDF.write.partitionBy("date", "hour").insertInto("cooked_pea_account") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
@@ -70,8 +81,8 @@ object SimpleApp {
       //hiveDF.write.mode(SaveMode.Overwrite).partitionBy("date", "hour").insertInto("cooked_pea_account") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
       //hiveDF.write.mode("overwrite").partitionBy("date", "hour").json("/user/hive/warehouse/cooked_pea_account_test/mytest.json")
 
-      println("....... [DEBUG] SELECT * FROM cooked_pea_account")
-      val appendCookedPea = sqlContext.sql("SELECT * FROM cooked_pea_account")
+      println("....... [DEBUG] SELECT * FROM "+ hiveTableNameToWrite) //FROM cooked_pea_account")
+      val appendCookedPea = sqlContext.sql("SELECT * FROM "+ hiveTableNameToWrite) //dev_core.cooked_pea_account")
       appendCookedPea.show()
 
     } else {
@@ -105,14 +116,51 @@ object SimpleApp {
   }
 
 
-  def saveAsTableToHiveTableFormatOrc(df: DataFrame): Unit = { //does not write, no error
-    df.write.mode(SaveMode.Overwrite).format("orc").saveAsTable("cooked_pea_account")
+  def saveAsTableToHiveTableFormatOrcWithoutPartition(df: DataFrame, tableName : String): Unit = { //does write to table, no error
+    df.write.mode(SaveMode.Overwrite).format("orc").saveAsTable(tableName) //"cooked_pea_account")
     println("................DEBUG WriteToHiveTable")
     df.show()
   }
 
+  def saveAsTableToHiveTableFormatOrcWithPartition(df: DataFrame, tableName : String): Unit = { //does write to table, no error
+    df.write.mode(SaveMode.Overwrite).format("orc").partitionBy("date", "hour").saveAsTable(tableName) //"cooked_pea_account")
+    println("................DEBUG WriteToHiveTable")
+    df.show()
+  }
+
+
+  def insertIntoTableFormatOrcWithPartition(df: DataFrame, tableName : String): Unit = {
+    df.write.mode(SaveMode.Append).format("orc").partitionBy("date", "hour").insertInto(tableName) //"dev_core.cooked_pea_account")
+    println("................DEBUG insertIntoTableFormatOrcWithPartition")
+    df.show()
+  }
+
+  def insertIntoTableFormatOrcWithoutPartition(df: DataFrame, tableName : String): Unit = {
+    df.coalesce(1).write.mode(SaveMode.Append).format("orc").insertInto(tableName) //"dev_core.cooked_pea_account")
+    println("................DEBUG insertIntoTableFormatOrcWithoutPartition")
+    df.show()
+  }
+
+
+  def saveAsTableToHiveTableFormatCsv(df: DataFrame): Unit = { //does not write, no error
+    //df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").saveAsTable("dev_core.cooked_pea_account")
+    df.write.mode(SaveMode.Overwrite).format("csv").saveAsTable("dev_core.cooked_pea_account")
+    println("................DEBUG saveAsTableToHiveTableFormatCsv()")
+    df.show()
+  }
+
+  //error
+  def saveAsTableToHiveTableFormatCsvWithPartition(df: DataFrame, tableName : String): Unit = { //does not write, no error
+    df.write.mode(SaveMode.Append).format("com.databricks.spark.csv").partitionBy("date", "hour").insertInto(tableName) //"dev_core.cooked_pea_account")
+
+    //below error - java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions(org.apache.hadoop.fs.Path, java.lang.String, java.util.Map, boolean, int, boolean, boolean, boolean)
+    //df.write.mode(SaveMode.Append).format("csv").partitionBy("date", "hour").saveAsTable(tableName) //"cooked_pea_account")
+    println("................DEBUG aveAsTableToHiveTableFormatCsvWithPartition()")
+    df.show()
+  }
+
   def writeToHiveTableInCsv(df: DataFrame): Unit = { //x
-    df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").insertInto("cooked_pea_account")
+    df.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").insertInto("dev_core.cooked_pea_account")
     println("................DEBUG WriteToHiveTableInCsv")
     df.show()
   }
@@ -317,6 +365,24 @@ object SimpleApp {
     return (y)
   }
 
+  //------------------------------------------------------------------------------------
+  // warning : insert statement is very slow in HIVE and it's not for HIVE in general
+  //------------------------------------------------------------------------------------
+  def insertIntoHive(sqlContext : HiveContext): Unit = {
+    sqlContext.sql("insert into cooked_pea_account1 partition (date='2018-01-01',hour=02) values (228918879,92017266,3445801,13671760,'481C4CC6B7A','CUSTOMER','2018-01-01 00:57:25','2018-03-15 13:33:06',2,100.0,112354305)")
+  }
+
+  //--------------------------------------------
+  // make partitions and save files in parquet
+  //--------------------------------------------
+  def writeToHiveWithCompress(hiveDF : DataFrame): Unit = {
+    val isSaveTable = true
+    if(isSaveTable) {
+      hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").saveAsTable("cooked_pea_account")
+    } else {
+      hiveDF.write.mode(SaveMode.Overwrite).option("compression", "gzip").partitionBy("date", "hour").insertInto("cooked_pea_account")
+    }
+  }
 }
 
 
