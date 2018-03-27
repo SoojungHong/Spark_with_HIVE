@@ -84,27 +84,11 @@ object SimpleApp {
       //----------------------
       val isHiveTableOp = false
       if(isHiveTableOp) {
-        //writeToHiveTable(df)
-        //writeToHiveTableInCsv(df)
-        //writeToHiveTableParquet
-        //writeToNewHiveTable(df)
-        //writeFewColumns(df)
-        //saveAsTableToHiveTable(df) //parquet is not readable from Hive table
         saveAsTableToHiveTableFormatOrcWithoutPartition(df, hiveTableNameToWrite) //orc code works, select * works, database structure changed  - best
-        //saveAsTableToHiveTableFormatOrcWithPartition(df, hiveTableNameToWrite) //folder is created but select * from don't work
-
-        //saveAsTableToHiveTableFormatCsv(df)
-        //saveAsTableToHiveTableFormatCsvWithPartition(df, hiveTableNameToWrite) //partition not working
         //insertIntoTableFormatOrcWithPartition(df, hiveTableNameToWrite) //error - partition error
         //insertIntoTableFormatOrcWithoutPartition(df, hiveTableNameToWrite) //orc code works, select * not working
-
-        //write dataframe into Hive Table
-        // X//hiveDF.write.partitionBy("date", "hour").insertInto("cooked_pea_account") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
-        //import org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions //Hive 2.1.1 - https://hive.apache.org/javadocs/r2.1.1/api/overview-summary.html
-      } else { //csv file in HDFS
+     } else { //csv file in HDFS
         //hiveDF.write.mode(SaveMode.Overwrite).partitionBy("date", "hour").insertInto("cooked_pea_account") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
-        //hiveDF.write.mode("overwrite").partitionBy("date", "hour").json("/user/hive/warehouse/cooked_pea_account_test/mytest.json")
-
         writeAsCsvFileInHive(df, sqlContext, sc, paramDate, paramHour)
       }
 
@@ -245,8 +229,10 @@ object SimpleApp {
     //sqlContext.sql("load data inpath '"+ mergedFileName + "' into table cooked_pea_account partition (date='2018-01-01', hour='03')")
 
     //`date`='2018-01-01',`hour`=03
-    //ToDo : replace with param 
-    sqlContext.sql("load data inpath '/user/hive/warehouse/cooked_pea_account/date=2018-01-01/hour=03/2018-01-01-03.csv' into table cooked_pea_account1 partition (`date`='2018-01-01',`hour`=03)")
+    //ToDo : replace with param
+    println(".......................[DEBUG] " + mergedFileName)
+    sqlContext.sql("load data inpath '"+mergedFileName+"' into table cooked_pea_account partition (`date`='"+paramDate+"',`hour`="+paramHour+")")
+    //sqlContext.sql("load data inpath '/user/hive/warehouse/cooked_pea_account/date=2018-01-01/hour=03/2018-01-01-03.csv' into table cooked_pea_account1 partition (`date`='2018-01-01',`hour`=03)")
 
   }
 
@@ -264,14 +250,6 @@ object SimpleApp {
     //write as csv
     //hiveDF.write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").partitionBy("date", "hour").insertInto("cooked_pea_account") //OK
     //hiveDF.coalesce(1).write.mode(SaveMode.Overwrite).format("com.databricks.spark.csv").option("header", "true").save("/user/hive/warehouse/cooked_pea_account/mytest.csv") //OK
-
-    /*
-    sqlContext.read.format("com.databricks.spark.csv")
-      //.option("header", "true")
-      .option("delimiter", ",")
-        .load("/user/hive/warehouse/cooked_pea_account_test/mytest.csv")
-      .insertInto("cooked_pea_account")
-    */
 
     sqlContext.read.format("com.databricks.spark.csv")
       .option("header", "true")
