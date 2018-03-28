@@ -42,6 +42,9 @@ object SimpleApp {
       var hiveTableNameToRead = "pea_account_raw"
       var hiveTableNameToWrite = "pea_account_cooked"
       var hiveMetaTableSubType = "meta_pea_account_subtype"
+      var hiveTableNameToReadTable = ""
+      var hiveTableNameToWriteTable = ""
+      var hiveMetaTableSubTypeTable = ""
 
       val paramDate = args.apply(0)
       val paramHour = args.apply(1)
@@ -63,22 +66,33 @@ object SimpleApp {
           hiveTableNameToWrite = "pea_account_cooked"
           hiveMetaTableSubType = "meta_pea_account_subtype"
         } else if (paramEnvironment.trim.toUpperCase.equals("DEV")){
-          val paramEnvironmentPrefix = "ec_dev"
+          val paramEnvironmentPrefix = "" //"ec_dev" - doesn't exist in SQL view
+          /*
           hiveTableNameToRead = paramEnvironmentPrefix+".pea_account_raw"
           hiveTableNameToWrite = paramEnvironmentPrefix+".pea_account_cooked"
           hiveMetaTableSubType = paramEnvironment.trim.toLowerCase+"_inthub_meta. meta_pea_account_subtype"
+          */
+          //ToDo : dev_core to namespace? yes, otherwise can not find table in unity media
+          hiveTableNameToReadTable = "dev_core.pea_account_raw"
+          hiveTableNameToWriteTable = "dev_core.pea_account_cooked"
+          hiveMetaTableSubTypeTable = "meta_pea_account_subtype"
         } else if (paramEnvironment.trim.toUpperCase.equals("TEST")) {
-          val paramEnvironmentPrefix = "ec_test"
+          val paramEnvironmentPrefix = ""//"ec_test" - doesn't exist in SQL view
+          /*
           hiveTableNameToRead = paramEnvironmentPrefix+".pea_account_raw"
           hiveTableNameToWrite = paramEnvironmentPrefix+".pea_account_cooked"
           hiveMetaTableSubType = paramEnvironment.trim.toLowerCase+"_inthub_meta. meta_pea_account_subtype"
+          */
+          hiveTableNameToRead = "pea_account_raw"
+          hiveTableNameToWrite = "pea_account_cooked"
+          hiveMetaTableSubType = "meta_pea_account_subtype"
         }
 
         //-------------------------------------------------
         // Read raw peas from Hive table 'pea_account_raw'
         //-------------------------------------------------
-        val peaAccountRawDF= sqlContext.sql("SELECT * FROM " + hiveTableNameToRead + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour);
-        println("............. [DEBUG] (SELECT * FROM "+ hiveTableNameToRead + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour);
+        val peaAccountRawDF= sqlContext.sql("SELECT * FROM " + hiveTableNameToReadTable + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour);
+        println("............. [DEBUG] (SELECT * FROM "+ hiveTableNameToReadTable + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour);
         peaAccountRawDF.show()
 
         val selectedCols = peaAccountRawDF.select(peaAccountRawDF.col("meta_past_id"), peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance") )
@@ -95,18 +109,16 @@ object SimpleApp {
         //----------------------
         val isHiveTableOp = false
         if(isHiveTableOp) {
-          saveAsTableToHiveTableFormatOrcWithoutPartition(df, hiveTableNameToWrite) //orc code works, select * works, database structure changed
+          saveAsTableToHiveTableFormatOrcWithoutPartition(df, hiveTableNameToWriteTable) //orc code works, select * works, database structure changed
           //insertIntoTableFormatOrcWithPartition(df, hiveTableNameToWrite) //error - partition error
           //hiveDF.write.mode(SaveMode.Overwrite).partitionBy("date", "hour").insertInto("pea_account_cooked") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
         } else { //csv file in HDFS
-          writeAsCsvFileInHDFS(df, sqlContext, sc, paramDate, paramHour, paramEnvironment, hiveTableNameToWrite)
+          writeAsCsvFileInHDFS(df, sqlContext, sc, paramDate, paramHour, paramEnvironment, hiveTableNameToWrite, hiveTableNameToWriteTable)
         }
 
         //----------------------------------------
         // Show 'pea_account_cooked' Hive table
         //----------------------------------------
-        //ToDo : if partition is not existing, then SELECT * FROM <table> doesn't work in UnityMedia environment
-        //ToDo : msck repair partition
         println("....... [DEBUG] SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour)
         val appendCookedPea = sqlContext.sql("SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour)
         appendCookedPea.show()
@@ -117,12 +129,11 @@ object SimpleApp {
         createAndTestLocalDataFrame()
     }
   }
-
-
+  
   def isArgEmpty(x : String) = x == null || x.trim.isEmpty //(Option(x).forall(_.isEmpty)
 
 
-  def writeAsCsvFileInHDFS(hiveDF : DataFrame, sqlContext: SQLContext, sc : SparkContext, paramDate : String, paramHour : String, paramEnv : String, hiveTableNameToWrite:String): Unit = {
+  def writeAsCsvFileInHDFS(hiveDF : DataFrame, sqlContext: SQLContext, sc : SparkContext, paramDate : String, paramHour : String, paramEnv : String, hiveTableNameToWrite:String, hiveTableNameToWriteTable:String): Unit = {
     //-------------------------
     //delete date HDFS folder
     import org.apache.hadoop.fs.FileSystem
@@ -177,10 +188,14 @@ object SimpleApp {
 
     println(".......................[DEBUG] " + mergedFileName)
     //ToDo : partition does exist? and do msck
+    //ToDo : if partition is not existing, then SELECT * FROM <table> doesn't work in UnityMedia environment
+    //ToDo : msck repair partition
+
     //hqlContext.runSqlHive("msck repair table table_name")
-    sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWrite+" partition (`date`='"+paramDate+"',`hour`="+paramHour+")")
+    sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (`date`='"+paramDate+"',`hour`="+paramHour+")")
 
     //store csv file since the original file is loaded into Hive table
+    /*
     hiveDF.coalesce(1)
       .write.format("com.databricks.spark.csv")
       .option("header", "false")
@@ -188,6 +203,7 @@ object SimpleApp {
 
     merge(mergeFindGlob, mergedFileName)
     hiveDF.unpersist() //Destroy all data and metadata related to this broadcast variables
+    */
   }
 
   import org.apache.hadoop.conf.Configuration
