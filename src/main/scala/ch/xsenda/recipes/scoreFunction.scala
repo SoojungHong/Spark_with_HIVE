@@ -2,7 +2,7 @@ package ch.xsenda.recipes
 
 class scoreFunction {
 
-  def speedtest_scorefunction (x : Int) : Double = {
+  def speedTestScoreFunction (x : Double) : Double = { //symetric tangent
     val zeroThresh = 80
     val slopePos = 0.1
     val slopeNeg = 0.6
@@ -19,21 +19,17 @@ class scoreFunction {
     else {
       y = factorNeg * scala.math.atan(-slopeNeg * (zeroThresh-x))
     }
-
     return(y)
   }
 
-  def hfc_scorefunction () = {
-/*
-func <- function(x){
-     y <- (maxPos - maxMin) * exp(-slope * x) - (maxPos - maxMin) + maxPos
-     return(y)
-}
+  def HFCScoreFunction (x : Double) : Double = { //negative decay function
+    var score = 0.0
+    val slope = 1.2
+    val maxPos = 0
+    val maxMin = -2
 
-slope <- 1.2
-maxPos <- 0
-maxMin <- -2
- */
+    score = (maxPos - maxMin) * math.exp(-slope * x) - (maxPos - maxMin) + maxPos
+    return(score)
   }
 
 }
