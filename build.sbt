@@ -10,6 +10,12 @@ val sparkVersion = "1.6.0"
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
 scalacOptions += "-deprecation"
 
-libraryDependencies += "org.apache.spark" %% "spark-hive" % sparkVersion
+libraryDependencies += "org.apache.spark" % "spark-hive_2.10" % "1.6.3"
 libraryDependencies += "org.apache.spark" % "spark-core_2.10" % sparkVersion
 libraryDependencies += "org.apache.spark" % "spark-sql_2.10" % sparkVersion
+libraryDependencies += "com.databricks" % "spark-csv_2.10" % "1.1.0"
+libraryDependencies += "org.apache.hive" % "hive-exec" % "1.1.0"
+
+
+
+
