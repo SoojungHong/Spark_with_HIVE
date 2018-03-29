@@ -55,7 +55,7 @@ object SimpleApp {
       println("............. [DEBUG] params : date = " + paramDate + " ,hour = " + paramHour, " ,env = " + paramEnvironment + " ,peaType = " + paramPeaType)
       if (isArgEmpty(paramDate) || isArgEmpty(paramHour) || isArgEmpty(paramEnvironment) || isArgEmpty(paramPeaType)) {
         println(".....................[INFO] Arguments missing, Please put correct argument as <Date> <Hour> <Environment> <PeaType>")
-        println(".....................[INFO] Spark-Submit example 2018-01-01 03 dev NA")
+        println(".....................[INFO] Spark-Submit parameters example : 2018-01-01 03 dev NA")
         sc.stop() //ToDo : return Spark job status
       } else {
         //----------------------------
@@ -83,6 +83,7 @@ object SimpleApp {
           hiveTableNameToWrite = paramEnvironmentPrefix+".pea_account_cooked"
           hiveMetaTableSubType = paramEnvironment.trim.toLowerCase+"_inthub_meta. meta_pea_account_subtype"
           */
+          //ToDo : what is the namespace for table of 'ec_test'
           hiveTableNameToRead = "pea_account_raw"
           hiveTableNameToWrite = "pea_account_cooked"
           hiveMetaTableSubType = "meta_pea_account_subtype"
@@ -109,7 +110,8 @@ object SimpleApp {
         //----------------------
         val isHiveTableOp = false
         if(isHiveTableOp) {
-          saveAsTableToHiveTableFormatOrcWithoutPartition(df, hiveTableNameToWriteTable) //orc code works, select * works, database structure changed
+          insertIntoHiveTable(df, hiveTableNameToWriteTable, sqlContext)
+          //saveAsTableToHiveTableFormatOrcWithoutPartition(df, hiveTableNameToWriteTable) //orc code works, select * works, database structure changed
           //insertIntoTableFormatOrcWithPartition(df, hiveTableNameToWrite) //error - partition error
           //hiveDF.write.mode(SaveMode.Overwrite).partitionBy("date", "hour").insertInto("pea_account_cooked") //--> java.lang.NoSuchMethodException: org.apache.hadoop.hive.ql.metadata.Hive.loadDynamicPartitions
         } else { //csv file in HDFS
@@ -119,17 +121,20 @@ object SimpleApp {
         //----------------------------------------
         // Show 'pea_account_cooked' Hive table
         //----------------------------------------
-        println("....... [DEBUG] SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour)
-        val appendCookedPea = sqlContext.sql("SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour)
-        appendCookedPea.show()
+        //println("....... [DEBUG] SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour)
+        //val appendCookedPea = sqlContext.sql("SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "date='" + paramDate + "' AND hour=" + paramHour)
+        //val appendCookedPea = sqlContext.sql("SELECT * FROM "+ hiveTableNameToWrite + " WHERE " + "`date`='"+paramDate+"' AND `hour`="+paramHour)
+        //appendCookedPea.show()
+        //sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (`date`='"+paramDate+"',`hour`="+paramHour+")")
 
         //ToDo : Return code (?) of status
+        println("...............[DEBUG] Finished SimpleApp")
       }
     } else {
         createAndTestLocalDataFrame()
     }
   }
-  
+
   def isArgEmpty(x : String) = x == null || x.trim.isEmpty //(Option(x).forall(_.isEmpty)
 
 
@@ -192,8 +197,9 @@ object SimpleApp {
     //ToDo : msck repair partition
 
     //hqlContext.runSqlHive("msck repair table table_name")
-    sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (`date`='"+paramDate+"',`hour`="+paramHour+")")
-
+    //X//sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (`date`='"+paramDate+"',`hour`="+paramHour+")")
+    sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (date='"+paramDate+"',hour="+paramHour+")")
+    println(".....................[DEBUG] load data inpath finished...")
     //store csv file since the original file is loaded into Hive table
     /*
     hiveDF.coalesce(1)
@@ -352,6 +358,16 @@ object SimpleApp {
     df.show()
   }
 
+  def insertIntoHiveTable(df: DataFrame, tableName : String, sqlContext: HiveContext): Unit = {
+    /*
+    sqlContext.sql("create table stefan_db.pea_account_test like pea_account_raw")
+    val df = sqlContext.sql("select * from pea_account_raw")
+    sqlContext.setConf("hive.exec.dynamic.partition", "true")
+    sqlContext.setConf("hive.exec.dynamic.partition.mode", "nonstrict")
+    df.coalesce(1).write.mode("append").partitionBy("date", "hour").insertInto("stefan_db.pea_account_test")
+    */
+    df.coalesce(1).write.mode("append").partitionBy("date", "hour").insertInto(tableName)
+  }
 
   def writeFewColumns(df: DataFrame) : Unit = {
     df.select(df.col("party_id"), df.col("date"), df.col("hour")).write.mode("overwrite").saveAsTable("pea_account_cooked")
