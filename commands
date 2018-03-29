@@ -1,0 +1,34 @@
+1. put csv file to HDFS
+make folder in hdfs
+#hdfs dfs -mkdir /user/hive/warehouse/peas
+#hdfs dfs -put rawpeas.csv /user/hive/warehouse/peas/
+
+2. transfer file local to Hadoop
+pscp -P 22 cookingpeas.jar root@192.168.21.***:/root
+
+3.
+zip -d cookingpeas.jar META-INF/*.RSA META-INF/*.DSA META-INF/*.SF
+
+4. Creating table
+hive> CREATE EXTERNAL TABLE IF NOT EXISTS peas(x1 INT, x2 INT, x3 INT)
+    > COMMENT 'peas table'
+    > ROW FORMAT DELIMITED
+    > FIELDS TERMINATED BY ','
+    > STORED AS TEXTFILE
+    > LOCATION '/user/hive/warehouse/peas';
+
+5.
+create table post39 (
+x1 string,
+x2 string,
+x3 string
+)
+row format delimited
+fields terminated by ','
+stored as textfile;
+
+6. Fill in table using csv file
+LOAD DATA INPATH '/user/hive/warehouse/peas/rawpeas.csv' INTO TABLE peas;
+
+
+
