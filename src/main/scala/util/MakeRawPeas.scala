@@ -18,7 +18,6 @@ object MakeRawPeas {
     val x3List = (1 to 10).toList
     val random = new Random()
     var listOfPeas = new ListBuffer[Array[String]]()
-    //listOfPeas += csvHeader //add csv file header? no need
 
     //generate peas
     for(i <- 1 to 20000000) {
@@ -27,10 +26,6 @@ object MakeRawPeas {
 
     csvWriter.writeAll(listOfPeas.toList)
     outputFile.close()
-
-    //creating peas with numerical values
-    //createRawPeas()
-
   }
 
   def createRawPeas(): Unit = {
@@ -41,12 +36,10 @@ object MakeRawPeas {
     val x2List = (1 to 10).toList
     val x3List = (1 to 10).toList
     val random = new Random()
-    var listOfPeas = new ListBuffer[Array[String]]() //new ListBuffer[Array[Int]]()
-    //listOfPeas += csvHeader //add csv file header? no need
+    var listOfPeas = new ListBuffer[Array[String]]()
 
     //generate peas
     for(i <- 1 to 20) { //20000000) {
-      //listOfPeas += Array(x1List(random.nextInt(x1List.length)),x2List(random.nextInt(x2List.length)),x3List(random.nextInt(x3List.length)))
       var intArr = Array(x1List(random.nextInt(x1List.length)),x2List(random.nextInt(x2List.length)),x3List(random.nextInt(x3List.length)))
       listOfPeas += intArr.map(_.toString)
     }
