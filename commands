@@ -1,15 +1,16 @@
 1. put csv file to HDFS
-make folder in hdfs
+1.1 make folder in hdfs
 #hdfs dfs -mkdir /user/hive/warehouse/peas
+1.2. put file to HDFS location
 #hdfs dfs -put rawpeas.csv /user/hive/warehouse/peas/
 
-2. transfer file local to Hadoop
+2. transfer file local to Hadoop using pscp
 pscp -P 22 cookingpeas.jar root@192.168.21.***:/root
 
-3.
+3. Zip the Invalid Signature files from jar
 zip -d cookingpeas.jar META-INF/*.RSA META-INF/*.DSA META-INF/*.SF
 
-4. Creating table
+4. Creating table on Hive
 hive> CREATE EXTERNAL TABLE IF NOT EXISTS peas(x1 INT, x2 INT, x3 INT)
     > COMMENT 'peas table'
     > ROW FORMAT DELIMITED
@@ -17,7 +18,7 @@ hive> CREATE EXTERNAL TABLE IF NOT EXISTS peas(x1 INT, x2 INT, x3 INT)
     > STORED AS TEXTFILE
     > LOCATION '/user/hive/warehouse/peas';
 
-5.
+5. Create Table query
 create table post39 (
 x1 string,
 x2 string,
@@ -27,8 +28,55 @@ row format delimited
 fields terminated by ','
 stored as textfile;
 
-6. Fill in table using csv file
+6. Fill in table by loading csv file
 LOAD DATA INPATH '/user/hive/warehouse/peas/rawpeas.csv' INTO TABLE peas;
+
+7. Create table query
+CREATE EXTERNAL TABLE pea_account_cooked
+(
+   party_id           BIGINT,
+   building_port_id   BIGINT,
+   cpe_equipment_id   BIGINT,
+   cpe_port_id        BIGINT,
+   cpe_mac            STRING,
+   `trigger`          STRING,
+   ts_created         TIMESTAMP,
+   ts_received        TIMESTAMP,
+   meta_past_id       BIGINT,
+   meta_past_halflife       BIGINT,
+   score              DOUBLE,
+   root_id            BIGINT
+)
+PARTITIONED BY
+   (`date` DATE,
+    hour INT)
+row format delimited
+fields terminated by ','
+stored as textfile;
+
+8. Spark-Submit command
+spark-submit --class SimpleApp --packages com.databricks:spark-csv_2.10:1.1.0 cookingpeas.jar 2018-01-01 03 dev NA
+
+9. shell script that will be called by Talend
+export HADOOP_USER_NAME=ec_dev
+spark-submit --class SimpleApp --jars /opt/rubcom/bin/spark-csv_2.10-1.1.0.jar,/opt/rubcom/bin/commons-csv-1.5.jar /opt/rubcom/bin/cookingpeas.jar $1 $2 $3 $4
+
+10. syntax
+Things to be careful : `` in the partition name
+
+11. HIVE version
+direct writing to HIVE using insertInto() works on Spark-Shell (but not with Spark-Submit, it throws dynamicPartition error)
+df.coalesce(1).write.mode("append").partitionBy("date", "hour").insertInto("stefan_db.pea_account_test")
+
+12. Cloudera version
+The current Hive and Cloudera version are following.
+(Internal Cloudera)
+export HIVE_CLASSPATH=$(find /opt/cloudera/parcels/CDH-5.10.2-1.cdh5.10.2.p0.5/lib/hive/lib/ -name '*.jar' -not -name 'guava*' -print0 | sed 's/\x0/,/g')
+spark-shell --jars $HIVE_CLASSPATH/opt/cloudera/parcels/CDH-5.10.2-1.cdh5.10.2.p0.5/jars/spark-hive_2.10-1.6.0-cdh5.10.2.jar
+(unity)
+export HIVE_CLASSPATH=$(find /opt/cloudera/parcels/CDH-5.8.2-1.cdh5.8.3.p0.2/lib/hive/lib/ -name '*.jar' -not -name 'guava*' -print0 | sed 's/\x0/,/g')
+spark-shell --jars $HIVE_CLASSPATH/opt/cloudera/parcels/CDH-5.8.2-1.cdh5.8.3.p0.2/jars/spark-hive_2.10-1.6.0-cdh5.8.3.jar
+
 
 
 
