@@ -15,6 +15,8 @@ libraryDependencies += "org.apache.spark" % "spark-core_2.10" % sparkVersion
 libraryDependencies += "org.apache.spark" % "spark-sql_2.10" % sparkVersion
 libraryDependencies += "com.databricks" % "spark-csv_2.10" % "1.1.0"
 libraryDependencies += "org.apache.hive" % "hive-exec" % "1.1.0"
+libraryDependencies += "org.postgresql" % "postgresql" % "9.3-1102-jdbc41"
+
 
 
 

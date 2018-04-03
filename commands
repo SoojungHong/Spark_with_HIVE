@@ -77,6 +77,9 @@ spark-shell --jars $HIVE_CLASSPATH/opt/cloudera/parcels/CDH-5.10.2-1.cdh5.10.2.p
 export HIVE_CLASSPATH=$(find /opt/cloudera/parcels/CDH-5.8.2-1.cdh5.8.3.p0.2/lib/hive/lib/ -name '*.jar' -not -name 'guava*' -print0 | sed 's/\x0/,/g')
 spark-shell --jars $HIVE_CLASSPATH/opt/cloudera/parcels/CDH-5.8.2-1.cdh5.8.3.p0.2/jars/spark-hive_2.10-1.6.0-cdh5.8.3.jar
 
-
-
+13. Postgres version
+lnternal lab : 9.6.8
+unity : 9.6.3
+Spark 1.6.3 needs postgres 9.3.1102
+SPARK_CLASSPATH=postgresql-9.3-1102-jdbc41.jar bin/spark-shell
 

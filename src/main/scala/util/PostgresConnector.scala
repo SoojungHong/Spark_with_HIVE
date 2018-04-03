@@ -24,6 +24,7 @@ object PostgresConnector {
       .option("password", "2009Sent").load().select("meta_past_id")
 
     df_records.printSchema()
+
     df_records.show()
 
     //read whole table using load()
@@ -44,8 +45,6 @@ object PostgresConnector {
     val df_r = df.as("right_table")
     val joined_table = df_l.join(df_r, df_l.col("meta_past_id") === df_r.col("meta_past_id"), "inner")
     joined_table.show()
-
-    //joined_table.select(joined_table.col())
 
   }
 }
