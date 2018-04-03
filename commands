@@ -83,3 +83,7 @@ unity : 9.6.3
 Spark 1.6.3 needs postgres 9.3.1102
 SPARK_CLASSPATH=postgresql-9.3-1102-jdbc41.jar bin/spark-shell
 
+14. copy the jar (postgresql-9.3-1102-jdbc41.jar)
+sudo spark-submit --class SimpleApp --packages com.databricks:spark-csv_2.10:1.1.0 --jars /usr/bin/postgresql-9.3-1102-jdbc41.jar cookingpeas.jar 2018-01-01 03 local NA
+
+
