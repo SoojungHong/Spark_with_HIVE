@@ -34,10 +34,12 @@ object PostgresConnector {
       .option("user", "rubcom")
       .option("password", "2009Sent").load()
 
+    println("..............................[DEBUG] show meta_pea_account_subtype ")
     df.show()
 
     //read only 'meta_past_id', 'meta_pat_id', 'meta_past_halflife', 'scd_is_active', 'scd_is_deleted'
     val selectedDF = df.select(df.col("meta_past_id"), df.col("meta_pat_id"), df.col("meta_past_halflife"), df.col("scd_is_active"), df.col("scd_is_deleted"))
+    println("...............................[DEBUG] show meta_past_id and halflife")
     selectedDF.show()
 
     //join two dataframes

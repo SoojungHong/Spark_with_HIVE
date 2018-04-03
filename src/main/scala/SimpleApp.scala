@@ -2,7 +2,7 @@ import java.math.BigInteger
 
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.apache.spark.sql.{Column, DataFrame, SQLContext, SaveMode}
 import org.apache.spark.sql.functions._
 import com.databricks.spark.csv._
 import org.apache.spark.sql.hive.HiveContext
@@ -47,7 +47,7 @@ object SimpleApp {
       val paramPeaType = args.apply(3)
 
       //ToDo : Make log(debug) class
-      println("............. [DEBUG] params : date = " + paramDate + " ,hour = " + paramHour, " ,env = " + paramEnvironment + " ,peaType = " + paramPeaType)
+      println("............. [DEBUG] params : date = " + paramDate + " ,hour = " + paramHour + " ,env = " + paramEnvironment + " ,peaType = " + paramPeaType)
       if (isArgEmpty(paramDate) || isArgEmpty(paramHour) || isArgEmpty(paramEnvironment) || isArgEmpty(paramPeaType)) {
         println(".....................[INFO] Arguments missing, Please put correct argument as <Date> <Hour> <Environment> <PeaType>")
         println(".....................[INFO] Spark-Submit parameters example : 2018-01-01 03 dev NA")
@@ -57,9 +57,9 @@ object SimpleApp {
         // mapping correct parameters
         //----------------------------
         if (paramEnvironment.trim.toUpperCase.equals("NA") || paramEnvironment.trim.toUpperCase.equals("LOCAL")) {
-          hiveTableNameToRead = "pea_account_raw"
-          hiveTableNameToWrite = "pea_account_cooked"
-          hiveMetaTableSubType = "meta_pea_account_subtype"
+          hiveTableNameToReadTable = "pea_account_raw"
+          hiveTableNameToWriteTable = "pea_account_cooked"
+          hiveMetaTableSubTypeTable = "meta_pea_account_subtype"
         } else if (paramEnvironment.trim.toUpperCase.equals("DEV")){
           val paramEnvironmentPrefix = "" //"ec_dev" - doesn't exist in SQL view
           //'dev_core' to namespace? yes, otherwise can not find table in unity media
@@ -68,9 +68,9 @@ object SimpleApp {
           hiveMetaTableSubTypeTable = "meta_pea_account_subtype"
         } else if (paramEnvironment.trim.toUpperCase.equals("TEST")) {
           val paramEnvironmentPrefix = ""//"ec_test" - doesn't exist in SQL view
-          hiveTableNameToRead = "test_core.pea_account_raw"
-          hiveTableNameToWrite = "test_core.pea_account_cooked"
-          hiveMetaTableSubType = "meta_pea_account_subtype"
+          hiveTableNameToReadTable = "test_core.pea_account_raw"
+          hiveTableNameToWriteTable = "test_core.pea_account_cooked"
+          hiveMetaTableSubTypeTable = "meta_pea_account_subtype"
         }
 
         //-------------------------------------------------
@@ -87,7 +87,7 @@ object SimpleApp {
         //-------------------------------------------------
         // Calculate scores using dedicated score function
         //-------------------------------------------------
-        val df = calcScoreValue(peaAccountRawDF)
+        val df = calcScoreValue(peaAccountRawDF, sc)
 
         //----------------------
         // Write to Hive table
@@ -165,7 +165,12 @@ object SimpleApp {
     //msck repair partition is not necessary
     //hqlContext.runSqlHive("msck repair table table_name")
 
-    sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (date='"+paramDate+"',hour="+paramHour+")")
+    if(paramEnv.trim.toUpperCase.equals("LOCAL")) {
+      sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (`date`='"+paramDate+"',hour="+paramHour+")")
+    } else { //ToDo : check which one for unity media
+      sqlContext.sql("load data inpath '"+mergedFileName+"' into table "+hiveTableNameToWriteTable+" partition (date='"+paramDate+"',hour="+paramHour+")")
+    }
+
     println(".....................[DEBUG] load data inpath finished...")
 
     // backup : csv file since the original file is loaded into Hive table
@@ -189,16 +194,53 @@ object SimpleApp {
     FileUtil.copyMerge(hdfs, new Path(srcPath), hdfs, new Path(dstPath), true, hadoopConfig, null)  // the "true" setting deletes the source files once they are merged into the new output
   }
 
-  def calcScoreValue(peaAccountRawDF : DataFrame): DataFrame = {
+  def calcScoreValue(peaAccountRawDF : DataFrame, sc : SparkContext): DataFrame = {
     import org.apache.spark.sql.functions.udf
     val scoreFunc = udf(selectAndCalcScoreFunction _)
     val new_peaAccountRawDF = peaAccountRawDF.withColumn("score", scoreFunc(peaAccountRawDF.col("technical_value"), peaAccountRawDF.col("cust_relevance"), peaAccountRawDF.col("meta_past_id")))
     //'score' should be in between 'meta_past_halflife' and 'root_id'
     val scoreAddedCookedPeasDF = new_peaAccountRawDF.select(new_peaAccountRawDF.col("party_id"), new_peaAccountRawDF.col("building_port_id"), new_peaAccountRawDF.col("cpe_equipment_id"), new_peaAccountRawDF.col("cpe_port_id"), new_peaAccountRawDF.col("cpe_mac"), new_peaAccountRawDF.col("trigger"), new_peaAccountRawDF.col("ts_created"), new_peaAccountRawDF.col("ts_received"), new_peaAccountRawDF.col("meta_past_id"), new_peaAccountRawDF.col("score"), new_peaAccountRawDF.col("root_id"), new_peaAccountRawDF.col("date"), new_peaAccountRawDF.col("hour"))
-    val tmpHalfLifeGetFunc = udf(getHalfLifeTest _)
-    val halflifeAddedCookedPeasDF = scoreAddedCookedPeasDF.withColumn("meta_past_halflife", tmpHalfLifeGetFunc())
+
+    //val sqlContext: SQLContext = new SQLContext(sc)
+    //val tmpHalfLifeGetFunc = udf(getSubTypeHalfLife _)
+
+    /* temporary comment out
+    val halflifeAddedCookedPeasDF = scoreAddedCookedPeasDF.withColumn("meta_past_halflife", tmpHalfLifeGetFunc(sqlContext, scoreAddedCookedPeasDF))
     val cookedPeasDF = halflifeAddedCookedPeasDF.select(halflifeAddedCookedPeasDF.col("party_id"), halflifeAddedCookedPeasDF.col("building_port_id"), halflifeAddedCookedPeasDF.col("cpe_equipment_id"), halflifeAddedCookedPeasDF.col("cpe_port_id"), halflifeAddedCookedPeasDF.col("cpe_mac"), halflifeAddedCookedPeasDF.col("trigger"), halflifeAddedCookedPeasDF.col("ts_created"), halflifeAddedCookedPeasDF.col("ts_received"), halflifeAddedCookedPeasDF.col("meta_past_id"), halflifeAddedCookedPeasDF.col("meta_past_halflife"), halflifeAddedCookedPeasDF.col("score"), halflifeAddedCookedPeasDF.col("root_id"), halflifeAddedCookedPeasDF.col("date"), halflifeAddedCookedPeasDF.col("hour"))
+    */
+
+    val activeSubTypeDF = getSubTypeHalfLife(sc, scoreAddedCookedPeasDF)
+    println("........................[DEBUG] activeSubTypeDF")
+    activeSubTypeDF.show()
+
+    //join dataframe
+    //val df_l = activeSubTypeDF.as("left_table")
+    //val df_r = scoreAddedCookedPeasDF.as("right_table")
+    //val joined_table = df_l.join(df_r, df_l.col("meta_past_id") === df_r.col("meta_past_id"), "full_outer")
+    //ToDo : left full join? check
+    val halflifeAddedCookedPeasDFJoined = scoreAddedCookedPeasDF.join(activeSubTypeDF, scoreAddedCookedPeasDF.col("meta_past_id") === activeSubTypeDF.col("meta_past_id"), "left_outer")//(activeSubTypeDF.col("meta_past_id"))
+    val halflifeAddedCookedPeasDF = halflifeAddedCookedPeasDFJoined.drop(scoreAddedCookedPeasDF.col("meta_past_id"))
+    println("........................[DEBUG] halflifeAddedCookedPeasDF")
+    halflifeAddedCookedPeasDF.show()
+
+    //val halflifeAddedCookedPeasDF = scoreAddedCookedPeasDF.withColumn("meta_past_halflife", lit(1)) //tmpHalfLifeGetFunc(scoreAddedCookedPeasDF.col("meta_past_id")))
+    val cookedPeasDF = halflifeAddedCookedPeasDF.select(halflifeAddedCookedPeasDF.col("party_id"), halflifeAddedCookedPeasDF.col("building_port_id"), halflifeAddedCookedPeasDF.col("cpe_equipment_id"), halflifeAddedCookedPeasDF.col("cpe_port_id"), halflifeAddedCookedPeasDF.col("cpe_mac"), halflifeAddedCookedPeasDF.col("trigger"), halflifeAddedCookedPeasDF.col("ts_created"), halflifeAddedCookedPeasDF.col("ts_received"), halflifeAddedCookedPeasDF.col("meta_past_id"), halflifeAddedCookedPeasDF.col("meta_past_halflife"), halflifeAddedCookedPeasDF.col("score"), halflifeAddedCookedPeasDF.col("root_id"), halflifeAddedCookedPeasDF.col("date"), halflifeAddedCookedPeasDF.col("hour"))
+    println("........................[DEBUG] cookedPeasDF")
+    cookedPeasDF.show()
     cookedPeasDF
+  }
+
+  def getMetaSubtypeDF(sqlContext : SQLContext): DataFrame = {
+    val df = sqlContext.read.format("jdbc").option("url", "jdbc:postgresql://192.168.21.16/rubcom")
+      .option("driver", "org.postgresql.Driver")
+      .option("dbtable", "dev_inthub_meta_unity_spark.meta_pea_account_subtype")//"public.records")
+      .option("user", "rubcom")
+      .option("password", "2009Sent").load()//.select("meta_past_id")
+
+    val selectedDF = df.select(df.col("meta_past_id"), df.col("meta_past_halflife"), df.col("scd_is_active"), df.col("scd_is_deleted"))
+    println("...............................[DEBUG] show meta_past_id, scd info and halflife value")
+
+    return selectedDF
   }
 
   def calcScoreValueAndCast(peaAccountRawDF : DataFrame): DataFrame = {
@@ -280,9 +322,30 @@ object SimpleApp {
     return halflife
   }
 
-  def getHalfLifeTest() : Double = {
-    val halflife = 0.0
-    return halflife
+  def getSubTypeHalfLifeColumn(sc:SparkContext, rawPeasDF : DataFrame) : Column = {
+    //val conf = new SparkConf().setAppName("Postgres Application")//.setMaster("local")
+    //val sc = new SparkContext(conf)
+    val sqlContext: SQLContext = new SQLContext(sc)
+    val subTypeDF = getMetaSubtypeDF(sqlContext)
+    val activeSubTypeDF = subTypeDF.filter(subTypeDF.col("scd_is_active") === 1 && subTypeDF.col("scd_is_deleted") === 0)
+    println("........................[DEBUG] activeSubType DataFrame")
+    activeSubTypeDF.show()
+    return activeSubTypeDF.col("meta_past_halflife")
+  }
+
+  def getSubTypeHalfLife(sc:SparkContext, rawPeasDF : DataFrame) : DataFrame = {
+    //val conf = new SparkConf().setAppName("Postgres Application")//.setMaster("local")
+    //val sc = new SparkContext(conf)
+    val sqlContext: SQLContext = new SQLContext(sc)
+    val subTypeDF = getMetaSubtypeDF(sqlContext)
+    val activeSubTypeDF = subTypeDF.filter(subTypeDF.col("scd_is_active") === 1 && subTypeDF.col("scd_is_deleted") === 0)
+    //println("........................[DEBUG] activeSubType DataFrame")
+    //activeSubTypeDF.show()
+    return activeSubTypeDF
+  }
+
+  def getSqlContext(): Unit ={
+
   }
 
   def readTestHive(): Unit = {
