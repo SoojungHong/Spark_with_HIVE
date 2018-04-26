@@ -231,11 +231,11 @@ object SimpleApp {
   }
 
   def getMetaSubtypeDF(sqlContext : SQLContext): DataFrame = {
-    val df = sqlContext.read.format("jdbc").option("url", "jdbc:postgresql://----/rubcom")
+    val df = sqlContext.read.format("jdbc").option("url", "jdbc:postgresql://----/blabla")
       .option("driver", "org.postgresql.Driver")
       .option("dbtable", "dev_inthub_meta_unity_spark.meta_pea_account_subtype")//"public.records")
-      .option("user", "user")
-      .option("password", "password").load()//.select("meta_past_id")
+      .option("user", "bla")
+      .option("password", "blabla").load()//.select("meta_past_id")
 
     val selectedDF = df.select(df.col("meta_past_id"), df.col("meta_past_halflife"), df.col("scd_is_active"), df.col("scd_is_deleted"))
     println("...............................[DEBUG] show meta_past_id, scd info and halflife value")
@@ -264,7 +264,7 @@ object SimpleApp {
   }
 
 
-  def speedTestScoreFunction (x : Double) : Double = { //symmetric tangent
+  def TestScoreFunction (x : Double) : Double = { //symmetric tangent
     val zeroThresh = 80
     val slopePos = 0.1
     val slopeNeg = 0.6
@@ -285,7 +285,7 @@ object SimpleApp {
     return(y)
   }
 
-  def HFCScoreFunction (x : Double) : Double = { //negative decay function
+  def _ScoreFunction (x : Double) : Double = { //negative decay function
     var score = 0.0
 
     val slope = 1.2
