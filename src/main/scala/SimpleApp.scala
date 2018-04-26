@@ -231,11 +231,11 @@ object SimpleApp {
   }
 
   def getMetaSubtypeDF(sqlContext : SQLContext): DataFrame = {
-    val df = sqlContext.read.format("jdbc").option("url", "jdbc:postgresql://192.168.21.16/rubcom")
+    val df = sqlContext.read.format("jdbc").option("url", "jdbc:postgresql://----/rubcom")
       .option("driver", "org.postgresql.Driver")
       .option("dbtable", "dev_inthub_meta_unity_spark.meta_pea_account_subtype")//"public.records")
-      .option("user", "rubcom")
-      .option("password", "2009Sent").load()//.select("meta_past_id")
+      .option("user", "user")
+      .option("password", "password").load()//.select("meta_past_id")
 
     val selectedDF = df.select(df.col("meta_past_id"), df.col("meta_past_halflife"), df.col("scd_is_active"), df.col("scd_is_deleted"))
     println("...............................[DEBUG] show meta_past_id, scd info and halflife value")
